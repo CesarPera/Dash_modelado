@@ -1318,3 +1318,401 @@ app.layout = dbc.Container([
 
 if __name__ == "__main__":
     app.run(debug=True, port=8060)
+
+
+
+from dash import Dash, html, dcc
+import dash_bootstrap_components as dbc
+import pandas as pd
+import plotly.express as px
+
+app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+app.title = "Análisis Predictivo de Flujo Vehicular"
+# ===============================
+# CARGA DE DATOS
+# ===============================
+df = pd.read_excel("Flujo_vehicular_2014_2024.xlsx")
+
+veh_cols = [
+    'VEH_LIGEROS_TAR_DIF',
+    'VEH_LIGEROS_AUTOMOVILES',
+    'VEH_PESADOS_TAR_DIF',
+    'VEH_PESADOS__2E',
+    'VEH_PESADOS_3E',
+    'VEH_PESADOS_4E',
+    'VEH_PESADOS_5E',
+    'VEH_PESADOS_6E',
+    'VEH_PESADOS_7E'
+]
+
+# ===============================
+# HISTOGRAMAS (EDA)
+# ===============================
+hist_components = []
+
+for col in veh_cols:
+    fig = px.histogram(
+        df,
+        x=col,
+        nbins=20,
+        title=f"Distribución de {col}"
+    )
+    fig.update_layout(title_x=0.5)
+
+    hist_components.append(
+        dbc.Col(dcc.Graph(figure=fig), md=4)
+    )
+
+hist_rows = []
+for i in range(0, len(hist_components), 3):
+    hist_rows.append(
+        dbc.Row(hist_components[i:i+3], className="mb-4")
+    )
+
+# ===============================
+# MATRIZ DE CORRELACIÓN
+# ===============================
+corr = df[veh_cols].apply(pd.to_numeric, errors="coerce").corr()
+
+fig_corr = px.imshow(
+    corr,
+    text_auto=".2f",
+    aspect="auto",
+    title="Matriz de Correlación – Variables Vehiculares"
+)
+fig_corr.update_layout(title_x=0.5)
+
+# ===============================
+# SCATTER MÁS CORRELACIONADO
+# ===============================
+corr_unstack = corr.unstack()
+corr_unstack = corr_unstack[
+    corr_unstack.index.get_level_values(0) != corr_unstack.index.get_level_values(1)
+]
+corr_unstack = corr_unstack.sort_values(ascending=False)
+
+corr_unstack = corr_unstack[
+    ~corr_unstack.index.map(lambda x: tuple(sorted(x))).duplicated()
+]
+
+top_pairs = corr_unstack.head(4).index.tolist()
+scatter_figs = []
+
+for var_x, var_y in top_pairs:
+    fig = px.scatter(
+        df,
+        x=var_x,
+        y=var_y,
+        opacity=0.6,
+        title=f"Relación entre {var_x} y {var_y}"
+    )
+    fig.update_layout(
+        title_x=0.5,
+        height=400
+    )
+    scatter_figs.append(fig)
+def render_scatter_rows(figs):
+    rows = []
+    for i in range(0, len(figs), 2):
+        rows.append(
+            dbc.Row([
+                dbc.Col(dcc.Graph(figure=figs[i]), md=6),
+                dbc.Col(dcc.Graph(figure=figs[i+1]), md=6)
+            ], className="mb-4")
+        )
+    return rows
+
+scatter_rows = render_scatter_rows(scatter_figs)
+
+
+# ===============================
+# LAYOUT
+# ===============================
+app.layout = dbc.Container([
+
+    # --------- TÍTULO ---------
+    dbc.Row([
+        dbc.Col([
+            html.H1("Análisis Predictivo del Flujo Vehicular",
+                    className="text-center text-primary mt-4"),
+            html.P("Clasificación y regresión aplicadas a datos de peajes",
+                   className="text-center text-muted")
+        ])
+    ]),
+
+    html.Hr(),
+
+    # --------- TABS ---------
+    dbc.Tabs([
+
+        # ===============================
+        # TAB 1: PROBLEMA Y OBJETIVO
+        # ===============================
+        dbc.Tab(label="Problema y Objetivo", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Problema"),
+                    html.P(
+                        "El aumento del flujo vehicular genera congestión en ciertos peajes, "
+                        "afectando la movilidad y la gestión del transporte."
+                    ),
+
+                    html.H4("Objetivo"),
+                    html.P(
+                        "Analizar el flujo vehicular para identificar patrones de congestión "
+                        "y predecir los peajes más saturados usando modelos de clasificación y regresión."
+                    )
+                ], md=10)
+            ], className="mt-4")
+        ]),
+
+        # ===============================
+        # TAB 2: CONOCIENDO EL NEGOCIO
+        # ===============================
+        dbc.Tab(label="Conociendo el Negocio", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Contexto del negocio"),
+                    html.P(
+                        "Los peajes son puntos críticos de control vehicular. "
+                        "Una mala gestión puede generar retrasos, pérdidas económicas "
+                        "y malestar en los usuarios."
+                    ),
+
+                    html.H4("Beneficio del análisis"),
+                    html.Ul([
+                        html.Li("Identificar peajes críticos"),
+                        html.Li("Optimizar recursos y personal"),
+                        html.Li("Apoyar la toma de decisiones estratégicas")
+                    ])
+                ], md=10)
+            ], className="mt-4")
+        ]),
+
+        # ===============================
+        # TAB 3: EDA
+        # ===============================
+        dbc.Tab(label="EDA", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Análisis Exploratorio de Datos (EDA)"),
+                    html.P(
+                        "El análisis exploratorio permite comprender el comportamiento "
+                        "del flujo vehicular mediante el estudio de distribuciones, "
+                        "frecuencias y relaciones entre variables antes de aplicar "
+                        "modelos predictivos."
+                    )
+                ])
+            ], className="mt-4"),
+          # --------- HISTOGRAMA  ---------
+            html.Hr(),
+
+            html.H5("Histogramas por Tipo de Vehículo"),
+            *hist_rows,
+
+            html.Hr(),
+
+            html.H6("Interpretación de los Histogramas Individuales:"),
+            html.P(
+                "Todos los histogramas muestran el conteo de diferentes tipos de vehículos "
+                "y presentan un patrón común de asimetría positiva (sesgo a la derecha)."
+            ),
+            html.P(
+                "1. VEH_LIGEROS_AUTOMOVILES y VEH_LIGEROS_TAR_DIF concentran el mayor volumen "
+                "de tráfico. La mayoría de los registros se ubican en valores bajos, con "
+                "una cola larga asociada a eventos de alto flujo vehicular."
+            ),
+            html.P(
+                "2. Los VEH_PESADOS de 2 a 6 ejes presentan distribuciones decrecientes. "
+                "Los vehículos de 2 y 3 ejes tienen mayor frecuencia y amplitud que "
+                "los de mayor tamaño."
+            ),
+            html.P(
+                "3. El caso de VEH_PESADOS_7E es extremo, con la mayoría de los valores "
+                "cercanos a cero, lo que indica una presencia muy poco frecuente."
+            ),
+            html.P(
+                "4. VEH_PESADOS_TAR_DIF muestra una distribución dominada por valores bajos, "
+                "confirmando que estos vehículos son menos comunes que los automóviles."
+            ),
+
+            html.H6("Conclusión: "),
+            html.P(
+                "Los datos no siguen una distribución normal y evidencian una predominancia "
+                "del tráfico ligero sobre el pesado. Además, la frecuencia vehicular "
+                "disminuye conforme aumenta el número de ejes, lo cual es consistente "
+                "con el comportamiento típico de las redes viales. Este resultado "
+                "justifica el uso de modelos predictivos que no asuman normalidad."
+            ),
+
+            # --------- CORRELACIÓN ---------
+            dbc.Row([
+                dbc.Col(md=2),
+                dbc.Col([
+                    dcc.Graph(figure=fig_corr),
+                    html.H6("Interpretación de la Matriz de Correlación:"),
+                    html.P(
+                        "La matriz de correlación utiliza el coeficiente de Pearson, cuyos valores "
+                        "oscilan entre -1 y 1, para medir la relación lineal entre las variables "
+                        "vehiculares."
+                    ),
+
+                    html.P(
+                        "1. Correlaciones muy fuertes (tonos amarillo/naranja): Existe una colinealidad "
+                        "extremadamente alta entre las categorías de vehículos pesados de 3, 4, 5 y "
+                        "6 ejes, con valores que oscilan aproximadamente entre 0.80 y 0.94."
+                    ),
+                    html.P(
+                        "Significado: Cuando aumenta el flujo de un tipo de vehículo pesado "
+                        "(por ejemplo, 4 ejes), también aumenta el de los otros tipos similares. "
+                        "Estos vehículos operan como un bloque logístico dentro de la red vial."
+                    ),
+
+                    html.P(
+                        "2. Correlaciones moderadas: Los vehículos ligeros (automóviles) presentan una "
+                        "relación moderada con los vehículos pesados de 2 y 3 ejes, con coeficientes "
+                        "alrededor de 0.66 y 0.69."
+                    ),
+                    html.P(
+                        "Significado: El tráfico de automóviles tiende a coincidir temporalmente con "
+                        "el de camiones pequeños, pero esta relación se debilita conforme aumenta "
+                        "el número de ejes del vehículo."
+                    ),
+
+                    html.P(
+                        "3. Correlaciones débiles o nulas (tonos azul oscuro): La variable "
+                        "VEH_LIGEROS_TAR_DIF presenta valores cercanos a cero o incluso negativos "
+                        "respecto a la mayoría de las demás variables."
+                    ),
+                    html.P(
+                        "Significado: El comportamiento de los vehículos con tarifa diferenciada "
+                        "es estadísticamente independiente del flujo general de camiones y "
+                        "automóviles particulares."
+                    ),
+
+                    html.H6("Conclusión: "),
+                    html.P(
+                        "La conclusión principal es la existencia de una alta redundancia de "
+                        "información entre las variables de vehículos pesados de 3 a 6 ejes. "
+                        "Para la construcción de modelos predictivos, no es necesario incluir "
+                        "todas estas variables simultáneamente, ya que explican prácticamente "
+                        "el mismo comportamiento."
+                    ),
+                    html.P(
+                        "En contraste, los vehículos ligeros y los vehículos de gran tamaño "
+                        "(7 ejes) muestran comportamientos estadísticamente independientes, "
+                        "aportando información complementaria relevante para los modelos "
+                        "de clasificación y regresión."
+                    )
+                ], md=8),
+                dbc.Col(md=2)
+            ]),
+
+            html.Hr(),
+
+            # --------- SCATTER  ---------
+            html.Hr(),
+
+            html.H5("Diagramas de Dispersión: Variables con Mayor Correlación"),
+
+            *scatter_rows,
+
+            html.H6("Interpretación: "),
+            html.P(
+                "1. Los diagramas de dispersión presentan una correlación directa evidente, "
+                "mostrando una pendiente ascendente clara. Esto indica que el flujo de "
+                "vehículos pesados de diferentes números de ejes (2E, 3E, 4E, 5E y 6E) "
+                "aumenta y disminuye de manera simultánea."
+            ),
+            html.P(
+                "2. Se observa un acoplamiento estrecho entre ciertas categorías, siendo la "
+                "relación entre vehículos de 5 ejes (5E) y 6 ejes (6E) la más lineal y "
+                "compacta. Esto sugiere que estos tipos de vehículos comparten casi "
+                "exactamente las mismas rutas, horarios y dinámicas logísticas."
+            ),
+            html.P(
+                "3. La concentración de puntos cerca del origen (0,0) indica que "
+                "los volúmenes elevados de tráfico pesado ocurren con menor frecuencia, "
+                "confirmando que los eventos de alta carga vehicular son puntuales."
+            ),
+
+            html.H6("Conclusión: "),
+            html.P(
+                "El análisis de los diagramas de dispersión demuestra que la carga pesada "
+                "en la red vial se desplaza como un bloque altamente sincronizado. La "
+                "redundancia estadística entre las categorías de vehículos pesados es tan "
+                "alta que el comportamiento de una sola variable (por ejemplo, 6E) "
+                "permite predecir con gran precisión el comportamiento de las demás "
+                "categorías relacionadas, como 4E o 5E."
+            ),
+            html.P(
+                "Este resultado justifica la reducción del número de variables pesadas "
+                "en los modelos predictivos, ya que mantener todas las categorías no "
+                "aportaría información adicional significativa y podría afectar la "
+                "estabilidad y eficiencia del modelo."
+            )
+
+        ]),
+    
+        # ===============================
+        # TAB 4: CLASIFICACIÓN
+        # ===============================
+        dbc.Tab(label="Clasificación", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Modelo de Clasificación – Árbol de Decisión"),
+                    html.P(
+                        "El árbol de decisión se utilizó para clasificar el flujo vehicular "
+                        "en niveles Bajo, Medio y Alto."
+                    ),
+                    html.P(
+                        "Este modelo permite identificar qué tipo de vehículo "
+                        "contribuye más a la congestión."
+                    )
+                ])
+            ], className="mt-4")
+        ]),
+
+        # ===============================
+        # TAB 5: REGRESIÓN
+        # ===============================
+        dbc.Tab(label="Regresión", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Modelo de Regresión Lineal"),
+                    html.P(
+                        "La regresión lineal se utilizó para predecir "
+                        "qué peajes presentarán mayor saturación."
+                    ),
+                    html.P(
+                        "Se analizaron variables temporales y tipos de vehículos "
+                        "para estimar el flujo vehicular total."
+                    )
+                ])
+            ], className="mt-4")
+        ]),
+
+        # ===============================
+        # TAB 6: CONCLUSIÓN
+        # ===============================
+        dbc.Tab(label="Conclusión", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Conclusión General"),
+                    html.P(
+                        "El árbol de decisión permitió identificar los vehículos "
+                        "con mayor impacto en la congestión, mientras que la regresión lineal "
+                        "ayudó a predecir los peajes más saturados, aportando información clave "
+                        "para la gestión del tráfico."
+                    )
+                ])
+            ], className="mt-4")
+        ])
+
+    ])
+], fluid=True)
+
+if __name__ == "__main__":
+    app.run(debug=True, port=8060)
+
+
