@@ -1,147 +1,14 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.model_selection import train_test_split
 from dash import Dash, html, dcc
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -157,7 +24,7 @@ app.title = "Análisis Predictivo de Flujo Vehicular"
 # CARGAR DATOS
 # ===============================
 df = pd.read_excel(
-    r"C:\Users\camila\Desktop\presentacion\Flujo_vehicular_2014_2024 (1).xlsx"
+    r"Flujo_vehicular_2014_2024 (1).xlsx"
 )
 
 df = df.rename(columns={"A�O": "AÑO"})
@@ -183,14 +50,6 @@ fig_depa = px.bar(
 # TORNEO DE MODELOS (CLASE)
 # ===============================
 
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, f1_score
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import StandardScaler
-import pandas as pd
-import plotly.express as px
 
 variables = [
     'VEH_LIGEROS_TAR_DIF',
@@ -232,7 +91,7 @@ modelos = {
 resultados = []
 
 for nombre, modelo in modelos.items():
-    
+
     # Árbol no necesita escalado
     if nombre == "Árbol de Decisión":
         modelo.fit(X_train, y_train)
@@ -247,7 +106,8 @@ for nombre, modelo in modelos.items():
         "F1-Score": round(f1_score(y_test, y_pred, average='weighted'), 4)
     })
 
-df_torneo = pd.DataFrame(resultados).sort_values(by="Accuracy", ascending=False)
+df_torneo = pd.DataFrame(resultados).sort_values(
+    by="Accuracy", ascending=False)
 
 fig_torneo = px.bar(
     df_torneo,
@@ -259,14 +119,8 @@ fig_torneo = px.bar(
 )
 
 fig_torneo.update_traces(textposition="outside")
-fig_torneo.update_layout(yaxis_range=[0,1])
+fig_torneo.update_layout(yaxis_range=[0, 1])
 
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # -----------------------------
 # VARIABLES DE REGRESIÓN
@@ -306,8 +160,6 @@ mae_tree = mean_absolute_error(y_test_reg, y_pred_tree)
 rmse_tree = np.sqrt(mean_squared_error(y_test_reg, y_pred_tree))
 r2_tree = r2_score(y_test_reg, y_pred_tree)
 
-import plotly.express as px
-import pandas as pd
 
 # =========================
 # TORNEO REGRESIÓN DATA
@@ -371,13 +223,11 @@ app.layout = dbc.Container([
                 dbc.Col([
                     html.H4("Problema"),
                     html.P(
-                        "El aumento del flujo vehicular genera congestión en ciertos peajes, "
-                        "afectando la movilidad y la gestión del transporte."
+                        "La empresa encargada de la administración de peajes ha observado un crecimiento constante del flujo vehicular entre 2014 y 2024. Sin embargo, no cuenta con un análisis predictivo ni una planificación basada en datos para enfrentar la posible saturación vial y la sobrecarga operativa esperada para el año 2025."
                     ),
                     html.H4("Objetivo"),
                     html.P(
-                        "Analizar el flujo vehicular para identificar patrones de congestión "
-                        "y predecir los peajes más saturados usando modelos de clasificación y regresión."
+                        "El objetivo es analizar el comportamiento histórico del flujo vehicular (2014–2024) para identificar tendencias y proyectar la demanda esperada para el año 2025, con el fin de optimizar la planificación operativa y de mantenimiento."
                     )
                 ], md=10)
             ], className="mt-4")
@@ -435,122 +285,125 @@ app.layout = dbc.Container([
         ]),
 
         # ===============================
-# TAB: LIMPIEZA Y TRANSFORMACIÓN
-# ===============================
-dbc.Tab(label="Limpieza y Transformación de Datos", children=[
+        # TAB: LIMPIEZA Y TRANSFORMACIÓN
+        # ===============================
+        dbc.Tab(label="Limpieza y Transformación de Datos", children=[
 
-    dbc.Row([
-        dbc.Col([
+            dbc.Row([
+                dbc.Col([
 
-            html.H4("Proceso de Limpieza y Transformación de Datos",
-                    className="text-center"),
+                    html.H4("Proceso de Limpieza y Transformación de Datos",
+                            className="text-center"),
 
-            html.Br(),
+                    html.Br(),
+
+                    html.P(
+                        "En esta etapa se realizó la depuración de datos para garantizar "
+                        "la calidad de la información utilizada en los modelos predictivos."
+                    ),
+
+                    html.Ul([
+                        html.Li(
+                            "Corrección de nombres de columnas mal codificados (ej. AÑO)."),
+                        html.Li("Verificación y eliminación de valores nulos."),
+                        html.Li("Agrupación de datos por año y departamento."),
+                        html.Li(
+                            "Transformación de variables para su uso en modelos de clasificación y regresión.")
+                    ]),
+
+                    html.P(
+                        "Estas transformaciones permiten mejorar la precisión de los modelos "
+                        "y asegurar resultados más confiables."
+                    )
+
+                ], md=10)
+
+            ], className="mt-4")
+
+        ]),
+
+
+        dbc.Tab(label="Torneo de Modelo", children=[
+
+            dbc.Row([
+                dbc.Col([
+                    html.H3("🏆 Torneo de Modelos de Clasificación"),
+                    html.P(
+                        "Se compararon los modelos enseñados en clase: "
+                        "Árbol de Decisión, SVM y Análisis Discriminante."
+                    )
+                ])
+            ], className="mt-4"),
+
+            dbc.Row([
+                dbc.Col([
+                    dbc.Table.from_dataframe(
+                        df_torneo,
+                        striped=True,
+                        bordered=True,
+                        hover=True,
+                        responsive=True
+                    )
+                ])
+            ], className="mt-3"),
+
+            dbc.Row([
+                dbc.Col([
+                    dcc.Graph(figure=fig_torneo)
+                ])
+            ], className="mt-4"),
+
+            dbc.Row([
+                dbc.Col([
+                    dbc.Alert(
+                        "El SVM obtuvo mayor exactitud (97%), sin embargo, se seleccionó el Árbol de Decisión debido a su interpretabilidad. Dado que el objetivo del negocio es identificar qué variables generan congestión, el árbol permite visualizar reglas claras de decisión que apoyan la planificación operativa. La diferencia de rendimiento fue mínima (2.8%), por lo que se priorizó la explicabilidad sobre una ligera mejora predictiva.",
+                        color="success"
+                    )
+                ])
+            ], className="mt-3"),
+
+            html.Hr(),
+
+            html.H4("🏆 Torneo de Modelos de Regresión", className="mt-4"),
 
             html.P(
-                "En esta etapa se realizó la depuración de datos para garantizar "
-                "la calidad de la información utilizada en los modelos predictivos."
+                "Comparación entre Regresión Lineal y Árbol de Regresión usando AÑO, MES y CODIGO_PEAJE."),
+
+            dbc.Table([
+                html.Thead(html.Tr([
+                    html.Th("Modelo"),
+                    html.Th("MAE"),
+                    html.Th("RMSE"),
+                    html.Th("R²")
+                ])),
+                html.Tbody([
+                    html.Tr([
+                        html.Td("Regresión Lineal"),
+                        html.Td(f"{mae_lr:,.2f}"),
+                        html.Td(f"{rmse_lr:,.2f}"),
+                        html.Td(f"{r2_lr:.4f}")
+                    ]),
+                    html.Tr([
+                        html.Td("Árbol de Regresión"),
+                        html.Td(f"{mae_tree:,.2f}"),
+                        html.Td(f"{rmse_tree:,.2f}"),
+                        html.Td(f"{r2_tree:.4f}")
+                    ]),
+                ])
+            ], bordered=True, striped=True, hover=True),
+
+            dbc.Row([
+                dbc.Col(dcc.Graph(figure=fig_rmse), md=6),
+                dbc.Col(dcc.Graph(figure=fig_r2), md=6)
+            ], className="mt-4"),
+
+            dbc.Alert(
+                "Aunque inicialmente se consideró la Regresión Lineal por su simplicidad e interpretabilidad, el torneo de modelos demostró que el comportamiento del flujo vehicular no es lineal. El Árbol de Regresión obtuvo un R² de 0.91 frente a 0.01 de la regresión lineal, por lo que se seleccionó como modelo final al capturar mejor las relaciones no lineales entre año, mes y código de peaje.",
+                color="info",
+                className="mt-3"
             ),
 
-            html.Ul([
-                html.Li("Corrección de nombres de columnas mal codificados (ej. AÑO)."),
-                html.Li("Verificación y eliminación de valores nulos."),
-                html.Li("Agrupación de datos por año y departamento."),
-                html.Li("Transformación de variables para su uso en modelos de clasificación y regresión.")
-            ]),
-
-            html.P(
-                "Estas transformaciones permiten mejorar la precisión de los modelos "
-                "y asegurar resultados más confiables."
-            )
-
-        ], md=10)
-
-    ], className="mt-4")
-
-]),
-
-
-       dbc.Tab(label="Torneo de Modelo", children=[
-
-    dbc.Row([
-        dbc.Col([
-            html.H3("🏆 Torneo de Modelos de Clasificación"),
-            html.P(
-                "Se compararon los modelos enseñados en clase: "
-                "Árbol de Decisión, SVM y Análisis Discriminante."
-            )
-        ])
-    ], className="mt-4"),
-
-    dbc.Row([
-        dbc.Col([
-            dbc.Table.from_dataframe(
-                df_torneo,
-                striped=True,
-                bordered=True,
-                hover=True,
-                responsive=True
-            )
-        ])
-    ], className="mt-3"),
-
-    dbc.Row([
-        dbc.Col([
-            dcc.Graph(figure=fig_torneo)
-        ])
-    ], className="mt-4"),
-
-    dbc.Row([
-        dbc.Col([
-            dbc.Alert(
-                "El SVM obtuvo mayor exactitud (97%), sin embargo, se seleccionó el Árbol de Decisión debido a su interpretabilidad. Dado que el objetivo del negocio es identificar qué variables generan congestión, el árbol permite visualizar reglas claras de decisión que apoyan la planificación operativa. La diferencia de rendimiento fue mínima (2.8%), por lo que se priorizó la explicabilidad sobre una ligera mejora predictiva.",
-                color="success"
-            )
-        ])
-    ], className="mt-3"),
-
-    html.Hr(),
-
-html.H4("🏆 Torneo de Modelos de Regresión", className="mt-4"),
-
-html.P("Comparación entre Regresión Lineal y Árbol de Regresión usando AÑO, MES y CODIGO_PEAJE."),
-
-dbc.Table([
-    html.Thead(html.Tr([
-        html.Th("Modelo"),
-        html.Th("MAE"),
-        html.Th("RMSE"),
-        html.Th("R²")
-    ])),
-    html.Tbody([
-        html.Tr([
-            html.Td("Regresión Lineal"),
-            html.Td(f"{mae_lr:,.2f}"),
-            html.Td(f"{rmse_lr:,.2f}"),
-            html.Td(f"{r2_lr:.4f}")
         ]),
-        html.Tr([
-            html.Td("Árbol de Regresión"),
-            html.Td(f"{mae_tree:,.2f}"),
-            html.Td(f"{rmse_tree:,.2f}"),
-            html.Td(f"{r2_tree:.4f}")
-        ]),
-    ])
-], bordered=True, striped=True, hover=True),
-
-dbc.Row([
-    dbc.Col(dcc.Graph(figure=fig_rmse), md=6),
-    dbc.Col(dcc.Graph(figure=fig_r2), md=6)
-], className="mt-4"),
-
-dbc.Alert(
-    "Aunque inicialmente se consideró la Regresión Lineal por su simplicidad e interpretabilidad, el torneo de modelos demostró que el comportamiento del flujo vehicular no es lineal. El Árbol de Regresión obtuvo un R² de 0.91 frente a 0.01 de la regresión lineal, por lo que se seleccionó como modelo final al capturar mejor las relaciones no lineales entre año, mes y código de peaje.",
-    color="info",
-    className="mt-3"
-),
-
-]),
 
         # ===============================
         # TAB 4
@@ -572,12 +425,14 @@ dbc.Alert(
         # TAB 6
         # ===============================
         dbc.Tab(label="Conclusión", children=[
-            html.Div(
-                "El análisis permitió identificar tendencias de crecimiento "
-                "y departamentos críticos, aportando información estratégica "
-                "para mejorar la gestión del tráfico.",
-                className="m-4"
-            )
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Conclusión General"),
+                    html.P(
+                        "El uso del árbol de decisión permitió identificar qué tipo de vehículo contribuye en mayor medida a la congestión del flujo vehicular, evidenciando que los vehículos ligeros son los principales responsables del incremento de la demanda en los peajes. Por otro lado, la regresión lineal permitió analizar y proyectar el nivel de saturación por peaje, identificando aquellos que presentarían mayor carga vehicular en el tiempo. En conjunto, ambas metodologías aportan una base analítica sólida para anticipar la congestión vial y apoyar la toma de decisiones en la planificación operativa y estructural de los peajes hacia el año 2025."
+                    )
+                ])
+            ], className="mt-4")
         ])
 
     ])
