@@ -15,29 +15,18 @@ from dash import Dash, html, dcc
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, mean_absolute_error, mean_squared_error, r2_score, f1_score
 
 
+# CARGAMOS LA APP
 app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 app.title = "Análisis Predictivo de Flujo Vehicular"
 
-
+# LA BASE DE DATOS
 df = pd.read_excel("Flujo_vehicular_2014_2024 (1).xlsx")
 
-df = df.rename(columns={"A�O": "AÑO"})
-
-fig_anio = px.line(
-    df.groupby("AÑO", as_index=False)["VEH_TOTAL"].sum(),
-    x="AÑO",
-    y="VEH_TOTAL",
-    markers=True
-)
-
-fig_depa = px.bar(
-    df.groupby("DEPARTAMENTO", as_index=False)["VEH_TOTAL"].sum(),
-    x="DEPARTAMENTO",
-    y="VEH_TOTAL"
-)
+df = df.rename(columns={"AÑO": "AÑO"})
+df["AÑO"] = df["AÑO"].astype(int)
 
 # ===============================
-# TORNEO DE MODELOS (CLASE)
+# VARIABLES
 # ===============================
 
 variables = [
@@ -54,62 +43,32 @@ variables = [
 
 X = df[variables]
 
-df['flujo_clase'] = pd.qcut(
-    df['VEH_TOTAL'],
-    q=3,
-    labels=['Bajo', 'Medio', 'Alto']
+df["flujo_clase"] = pd.qcut(
+    df["VEH_TOTAL"], q=3, labels=["Bajo", "Medio", "Alto"]
 )
 
+y_clf = df["flujo_clase"]
 y = df['flujo_clase']
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.3, random_state=42
+# ===============================
+# GRAFICO DE AÑO Y DEPARTAMENTO PARA CONOCIENDO EL NEGOCIO
+# ===============================
+
+fig_anio = px.line(
+    df.groupby("AÑO", as_index=False)["VEH_TOTAL"].sum(),
+    x="AÑO",
+    y="VEH_TOTAL",
+    markers=True
 )
 
-# 🔹 Escalado (IMPORTANTE para SVM y LDA)
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-modelos = {
-    "Árbol de Decisión": DecisionTreeClassifier(max_depth=5),
-    "SVM": SVC(kernel='rbf'),
-    "Discriminante (LDA)": LinearDiscriminantAnalysis()
-}
-
-resultados = []
-
-for nombre, modelo in modelos.items():
-
-    # Árbol no necesita escalado
-    if nombre == "Árbol de Decisión":
-        modelo.fit(X_train, y_train)
-        y_pred = modelo.predict(X_test)
-    else:
-        modelo.fit(X_train_scaled, y_train)
-        y_pred = modelo.predict(X_test_scaled)
-
-    resultados.append({
-        "Modelo": nombre,
-        "Accuracy": round(accuracy_score(y_test, y_pred), 4),
-        "F1-Score": round(f1_score(y_test, y_pred, average='weighted'), 4)
-    })
-
-df_torneo = pd.DataFrame(resultados).sort_values(
-    by="Accuracy", ascending=False)
-
-fig_torneo = px.bar(
-    df_torneo,
-    x="Modelo",
-    y="Accuracy",
-    text="Accuracy",
-    color="Modelo",
-    title="🏆 Torneo de Modelos - Clasificación"
+fig_depa = px.bar(
+    df.groupby("DEPARTAMENTO", as_index=False)["VEH_TOTAL"].sum(),
+    x="DEPARTAMENTO",
+    y="VEH_TOTAL"
 )
 
-fig_torneo.update_traces(textposition="outside")
-fig_torneo.update_layout(yaxis_range=[0, 1])
-
+fig_anio.update_layout(title=None)
+fig_depa.update_layout(title=None)
 
 # -----------------------------
 # VARIABLES DE REGRESIÓN
@@ -126,90 +85,6 @@ y_reg = df_reg['VEH_LIGEROS_TOTAL']
 X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(
     x_reg, y_reg, test_size=0.2, random_state=42
 )
-
-# -----------------------------
-# REGRESIÓN LINEAL
-# -----------------------------
-lr = LinearRegression()
-lr.fit(X_train_reg, y_train_reg)
-y_pred_lr = lr.predict(X_test_reg)
-
-mae_lr = mean_absolute_error(y_test_reg, y_pred_lr)
-rmse_lr = np.sqrt(mean_squared_error(y_test_reg, y_pred_lr))
-r2_lr = r2_score(y_test_reg, y_pred_lr)
-
-# -----------------------------
-# ÁRBOL DE REGRESIÓN
-# -----------------------------
-tree_reg = DecisionTreeRegressor(random_state=42)
-tree_reg.fit(X_train_reg, y_train_reg)
-y_pred_tree = tree_reg.predict(X_test_reg)
-
-mae_tree = mean_absolute_error(y_test_reg, y_pred_tree)
-rmse_tree = np.sqrt(mean_squared_error(y_test_reg, y_pred_tree))
-r2_tree = r2_score(y_test_reg, y_pred_tree)
-
-
-# =========================
-# TORNEO REGRESIÓN DATA
-# =========================
-
-df_torneo_reg = pd.DataFrame({
-    "Modelo": ["Regresión Lineal", "Árbol de Regresión"],
-    "RMSE": [65143.67, 19322.51],
-    "R2": [0.0161, 0.9134]
-})
-
-# Gráfico RMSE
-fig_rmse = px.bar(
-    df_torneo_reg,
-    x="Modelo",
-    y="RMSE",
-    title="Comparación RMSE (Menor es Mejor)",
-    text_auto=True
-)
-
-fig_rmse.update_layout(template="plotly_white")
-
-# Gráfico R2
-fig_r2 = px.bar(
-    df_torneo_reg,
-    x="Modelo",
-    y="R2",
-    title="Comparación R² (Mayor es Mejor)",
-    text_auto=True
-)
-
-fig_r2.update_layout(template="plotly_white")
-
-fig_anio.update_layout(title=None)
-fig_depa.update_layout(title=None)
-
-
-# ===============================
-# CARGA Y PREPARACIÓN DE DATOS
-# ===============================
-df["AÑO"] = df["AÑO"].astype(int)
-
-variables = [
-    "VEH_LIGEROS_TAR_DIF",
-    "VEH_LIGEROS_AUTOMOVILES",
-    "VEH_PESADOS_TAR_DIF",
-    "VEH_PESADOS__2E",
-    "VEH_PESADOS_3E",
-    "VEH_PESADOS_4E",
-    "VEH_PESADOS_5E",
-    "VEH_PESADOS_6E",
-    "VEH_PESADOS_7E",
-]
-
-X = df[variables]
-
-# Clases de flujo (Bajo, Medio, Alto) según terciles de VEH_TOTAL
-df["flujo_clase"] = pd.qcut(
-    df["VEH_TOTAL"], q=3, labels=["Bajo", "Medio", "Alto"]
-)
-y_clf = df["flujo_clase"]
 
 # ===============================
 # MODELO DE CLASIFICACIÓN
@@ -369,6 +244,28 @@ fig_metricas_clf.update_layout(
                 y=1.02, xanchor="right", x=1)
 )
 
+# -----------------------------
+# REGRESIÓN LINEAL
+# -----------------------------
+lr = LinearRegression()
+lr.fit(X_train_reg, y_train_reg)
+y_pred_lr = lr.predict(X_test_reg)
+
+mae_lr = mean_absolute_error(y_test_reg, y_pred_lr)
+rmse_lr = np.sqrt(mean_squared_error(y_test_reg, y_pred_lr))
+r2_lr = r2_score(y_test_reg, y_pred_lr)
+
+# -----------------------------
+# ÁRBOL DE REGRESIÓN
+# -----------------------------
+tree_reg = DecisionTreeRegressor(random_state=42)
+tree_reg.fit(X_train_reg, y_train_reg)
+y_pred_tree = tree_reg.predict(X_test_reg)
+
+mae_tree = mean_absolute_error(y_test_reg, y_pred_tree)
+rmse_tree = np.sqrt(mean_squared_error(y_test_reg, y_pred_tree))
+r2_tree = r2_score(y_test_reg, y_pred_tree)
+
 # ===============================
 # MODELO DE REGRESIÓN
 # ===============================
@@ -451,7 +348,9 @@ fig_scatter.update_layout(
                 y=1.02, xanchor="right", x=1)
 )
 
+# ===============================
 # --- Predicción 2025 y top peajes ---
+# ===============================
 df_2025 = df[df["AÑO"] == 2024].copy()
 df_2025["AÑO"] = 2025
 X_2025 = df_2025[["AÑO", "MES", "CODIGO_PEAJE"]]
@@ -491,25 +390,106 @@ fig_top_peajes.update_layout(
     xaxis_tickangle=-45
 )
 
+# ===============================
+# GRÁFICO DE VALORES FALTANTES
+# ===============================
 
-veh_cols = [
-    'VEH_LIGEROS_TAR_DIF',
-    'VEH_LIGEROS_AUTOMOVILES',
-    'VEH_PESADOS_TAR_DIF',
-    'VEH_PESADOS__2E',
-    'VEH_PESADOS_3E',
-    'VEH_PESADOS_4E',
-    'VEH_PESADOS_5E',
-    'VEH_PESADOS_6E',
-    'VEH_PESADOS_7E'
-]
+missing_data = df.isnull().sum().reset_index()
+missing_data.columns = ["Columna", "Valores Faltantes"]
+
+fig_missing = px.bar(
+    missing_data,
+    x="Columna",
+    y="Valores Faltantes",
+    title="Valores Faltantes por Variable",
+    text="Valores Faltantes"
+)
+
+fig_missing.update_layout(
+    template="plotly_white",
+    xaxis_tickangle=-45
+)
+
+# ===============================
+# BOXPLOT VEH_TOTAL
+# ===============================
+
+fig_boxplot = px.box(
+    df,
+    y="VEH_TOTAL",
+    title="Distribución y Outliers de VEH_TOTAL"
+)
+
+fig_boxplot.update_layout(template="plotly_white")
+
+# ==============================
+# TABLA: ESTADÍSTICOS VEH_TOTAL
+# ==============================
+
+stats = df["VEH_TOTAL"].describe().reset_index()
+stats.columns = ["Estadístico", "Valor"]
+
+# Redondear valores
+stats["Valor"] = stats["Valor"].round(2)
+
+# ===============================
+# TORNEO DE MODELOS (CLASE)
+# ===============================
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# 🔹 Escalado (IMPORTANTE para SVM y LDA)
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+modelos = {
+    "Árbol de Decisión": DecisionTreeClassifier(max_depth=5),
+    "SVM": SVC(kernel='rbf'),
+    "Discriminante (LDA)": LinearDiscriminantAnalysis()
+}
+
+resultados = []
+
+for nombre, modelo in modelos.items():
+
+    # Árbol no necesita escalado
+    if nombre == "Árbol de Decisión":
+        modelo.fit(X_train, y_train)
+        y_pred = modelo.predict(X_test)
+    else:
+        modelo.fit(X_train_scaled, y_train)
+        y_pred = modelo.predict(X_test_scaled)
+
+    resultados.append({
+        "Modelo": nombre,
+        "Accuracy": round(accuracy_score(y_test, y_pred), 4),
+        "F1-Score": round(f1_score(y_test, y_pred, average='weighted'), 4)
+    })
+
+df_torneo = pd.DataFrame(resultados).sort_values(
+    by="Accuracy", ascending=False)
+
+fig_torneo = px.bar(
+    df_torneo,
+    x="Modelo",
+    y="Accuracy",
+    text="Accuracy",
+    color="Modelo",
+    title="🏆 Torneo de Modelos - Clasificación"
+)
+
+fig_torneo.update_traces(textposition="outside")
+fig_torneo.update_layout(yaxis_range=[0, 1])
 
 # ===============================
 # HISTOGRAMAS (EDA)
 # ===============================
 hist_components = []
 
-for col in veh_cols:
+for col in variables:
     fig = px.histogram(
         df,
         x=col,
@@ -531,7 +511,7 @@ for i in range(0, len(hist_components), 3):
 # ===============================
 # MATRIZ DE CORRELACIÓN
 # ===============================
-corr = df[veh_cols].apply(pd.to_numeric, errors="coerce").corr()
+corr = df[variables].apply(pd.to_numeric, errors="coerce").corr()
 
 fig_corr = px.imshow(
     corr,
@@ -587,19 +567,46 @@ def render_scatter_rows(figs):
 
 scatter_rows = render_scatter_rows(scatter_figs)
 
+# =========================
+# TORNEO REGRESIÓN DATA
+# =========================
+df_torneo_reg = pd.DataFrame({
+    "Modelo": ["Regresión Lineal", "Árbol de Regresión"],
+    "RMSE": [rmse_lr, rmse_tree],
+    "R2": [r2_lr, r2_tree]
+})
 
-# XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Gráfico RMSE
+fig_rmse = px.bar(
+    df_torneo_reg,
+    x="Modelo",
+    y="RMSE",
+    title="Comparación RMSE (Menor es Mejor)",
+    text_auto=True
+)
 
+fig_rmse.update_layout(template="plotly_white")
+
+# Gráfico R2
+fig_r2 = px.bar(
+    df_torneo_reg,
+    x="Modelo",
+    y="R2",
+    title="Comparación R² (Mayor es Mejor)",
+    text_auto=True
+)
+
+fig_r2.update_layout(template="plotly_white")
 
 # ===============================
 # LAYOUT
 # ===============================
 app.layout = dbc.Container([
 
-    # --------- TÍTULO ---------
+    # --------- TÍTULO GENERAL ---------
     dbc.Row([
         dbc.Col([
-            html.H1("🚗 Análisis Predictivo del Flujo Vehicular",
+            html.H1("🚗🚦 Análisis Predictivo del Flujo Vehicular",
                     className="text-center text-primary mt-4 mb-2",
                     style={'fontWeight': 'bold'}),
             html.P("Clasificación y regresión aplicadas a datos de peajes",
@@ -610,22 +617,20 @@ app.layout = dbc.Container([
 
     html.Hr(style={'borderWidth': '3px', 'borderColor': COLOR_PRIMARY}),
 
-    # --------- TABS ---------
     dbc.Tabs([
+
 
         # ===============================
         # TAB 1: PROBLEMA Y OBJETIVO
         # ===============================
-        dbc.Tab(label="🎯 Problema y Objetivo", tab_style={'fontWeight': 'bold'}, children=[
+        dbc.Tab(label="🎯 Problema y Objetivo", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
             dbc.Row([
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
                             html.H4("🚨 Problema", className="text-danger mb-3"),
                             html.P(
-                                "El aumento del flujo vehicular genera congestión en ciertos peajes, "
-                                "afectando la movilidad y la gestión del transporte. La falta de predicción "
-                                "adecuada dificulta la planificación de recursos.",
+                                "La empresa encargada de la administración de peajes ha observado un crecimiento constante del flujo vehicular entre 2014 y 2024. Sin embargo, no cuenta con un análisis predictivo ni una planificación basada en datos para enfrentar la posible saturación vial y la sobrecarga operativa esperada para el año 2025.",
                                 style={'fontSize': '1.1rem',
                                        'lineHeight': '1.8'}
                             ),
@@ -637,20 +642,10 @@ app.layout = dbc.Container([
                             html.H4("🎯 Objetivo",
                                     className="text-success mb-3"),
                             html.P(
-                                "Desarrollar modelos predictivos para:",
+                                "El objetivo es analizar el comportamiento histórico del flujo vehicular (2014–2024) para identificar tendencias y proyectar la demanda esperada para el año 2025, con el fin de optimizar la planificación operativa y de mantenimiento.",
                                 style={'fontSize': '1.1rem',
                                        'fontWeight': 'bold'}
                             ),
-                            html.Ul([
-                                html.Li("Clasificar el flujo vehicular en niveles: Bajo, Medio, Alto",
-                                        style={'fontSize': '1.05rem', 'marginBottom': '10px'}),
-                                html.Li("Predecir el volumen de vehículos ligeros en diferentes peajes",
-                                        style={'fontSize': '1.05rem', 'marginBottom': '10px'}),
-                                html.Li("Identificar los peajes con mayor saturación esperada para 2025",
-                                        style={'fontSize': '1.05rem', 'marginBottom': '10px'}),
-                                html.Li("Determinar las variables más influyentes en la congestión",
-                                        style={'fontSize': '1.05rem', 'marginBottom': '10px'})
-                            ])
                         ])
                     ], className="shadow-sm", style={'borderLeft': f'5px solid {COLOR_SUCCESS}'})
                 ], md=10)
@@ -660,7 +655,7 @@ app.layout = dbc.Container([
         # ===============================
         # TAB 2: CONOCIENDO EL NEGOCIO
         # ===============================
-        dbc.Tab(label="💼 Conociendo el Negocio", tab_style={'fontWeight': 'bold'}, children=[
+        dbc.Tab(label="💼 Conociendo el Negocio", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
             dbc.Row([
                 dbc.Col([
                     dbc.Card([
@@ -681,34 +676,41 @@ app.layout = dbc.Container([
                         dbc.Col([
                             dbc.Card([
                                 dbc.CardBody([
-                                    html.H5("🚦 Beneficios Operacionales",
+                                    html.H5("📅 Evolución del Flujo Vehicular por Año",
                                             className="text-center mb-3",
                                             style={'color': COLOR_INFO}),
-                                    html.Ul([
-                                        html.Li("Identificar peajes críticos", style={
-                                                'fontSize': '1.05rem'}),
-                                        html.Li("Optimizar recursos humanos", style={
-                                                'fontSize': '1.05rem'}),
-                                        html.Li("Reducir tiempos de espera", style={
-                                                'fontSize': '1.05rem'})
-                                    ])
+                                    dcc.Graph(figure=fig_anio),
+
+                                    html.P(
+                                        "El análisis anual permite observar la tendencia del flujo "
+                                        "vehicular a lo largo del tiempo. Se identifican periodos "
+                                        "de crecimiento sostenido, lo que puede indicar mayor "
+                                        "actividad económica y movilidad. Esta información es clave "
+                                        "para proyectar demanda futura y planificar infraestructura.",
+                                        className="mt-3",
+                                        style={"textAlign": "justify"}
+                                    )
                                 ])
                             ], className="shadow-sm h-100", style={'borderTop': f'4px solid {COLOR_INFO}'})
                         ], md=6, className="mb-3"),
+
                         dbc.Col([
                             dbc.Card([
                                 dbc.CardBody([
-                                    html.H5("📈 Beneficios Estratégicos",
+                                    html.H5("📶 Flujo Vehicular Total por Departamento",
                                             className="text-center mb-3",
                                             style={'color': COLOR_SUCCESS}),
-                                    html.Ul([
-                                        html.Li("Planificar infraestructura", style={
-                                                'fontSize': '1.05rem'}),
-                                        html.Li("Decisiones basadas en datos", style={
-                                                'fontSize': '1.05rem'}),
-                                        html.Li("Mejorar experiencia del usuario", style={
-                                                'fontSize': '1.05rem'})
-                                    ])
+                                    dcc.Graph(figure=fig_depa),
+
+                                    html.P(
+                                        "Este gráfico permite identificar los departamentos con "
+                                        "mayor concentración vehicular. Aquellos con niveles más "
+                                        "altos representan zonas estratégicas para inversión y "
+                                        "optimización de recursos, mientras que los de menor flujo "
+                                        "pueden indicar oportunidades de desarrollo o menor demanda.",
+                                        className="mt-3",
+                                        style={"textAlign": "justify"}
+                                    )
                                 ])
                             ], className="shadow-sm h-100", style={'borderTop': f'4px solid {COLOR_SUCCESS}'})
                         ], md=6, className="mb-3")
@@ -720,23 +722,361 @@ app.layout = dbc.Container([
         # ===============================
         # TAB 3: EDA
         # ===============================
-        dbc.Tab(label="📊 EDA", tab_style={'fontWeight': 'bold'}, children=[
+        dbc.Tab(label="📊 EDA", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
             dbc.Row([
                 dbc.Col([
                     html.H4("Análisis Exploratorio de Datos (EDA)"),
                     html.P(
-                        "En esta etapa se analizan tendencias, distribuciones "
-                        "y patrones del flujo vehicular por año, mes y tipo de vehículo."
-                    ),
-                    html.P("Aquí se incluirán gráficos descriptivos.")
+                        "El análisis exploratorio permite comprender el comportamiento "
+                        "del flujo vehicular mediante el estudio de distribuciones, "
+                        "frecuencias y relaciones entre variables antes de aplicar "
+                        "modelos predictivos."
+                    )
                 ])
-            ], className="mt-4")
+            ], className="mt-4"),
+            # --------- HISTOGRAMA  ---------
+            html.Hr(),
+
+            html.H5("Histogramas por Tipo de Vehículo"),
+            *hist_rows,
+
+            html.Hr(),
+
+            html.H6("Interpretación de los Histogramas Individuales:"),
+            html.P(
+                "Todos los histogramas muestran el conteo de diferentes tipos de vehículos "
+                "y presentan un patrón común de asimetría positiva (sesgo a la derecha)."
+            ),
+            html.P(
+                "1. VEH_LIGEROS_AUTOMOVILES y VEH_LIGEROS_TAR_DIF concentran el mayor volumen "
+                "de tráfico. La mayoría de los registros se ubican en valores bajos, con "
+                "una cola larga asociada a eventos de alto flujo vehicular."
+            ),
+            html.P(
+                "2. Los VEH_PESADOS de 2 a 6 ejes presentan distribuciones decrecientes. "
+                "Los vehículos de 2 y 3 ejes tienen mayor frecuencia y amplitud que "
+                "los de mayor tamaño."
+            ),
+            html.P(
+                "3. El caso de VEH_PESADOS_7E es extremo, con la mayoría de los valores "
+                "cercanos a cero, lo que indica una presencia muy poco frecuente."
+            ),
+            html.P(
+                "4. VEH_PESADOS_TAR_DIF muestra una distribución dominada por valores bajos, "
+                "confirmando que estos vehículos son menos comunes que los automóviles."
+            ),
+
+            html.H6("Conclusión: "),
+            html.P(
+                "Los datos no siguen una distribución normal y evidencian una predominancia "
+                "del tráfico ligero sobre el pesado. Además, la frecuencia vehicular "
+                "disminuye conforme aumenta el número de ejes, lo cual es consistente "
+                "con el comportamiento típico de las redes viales. Este resultado "
+                "justifica el uso de modelos predictivos que no asuman normalidad."
+            ),
+
+            # --------- CORRELACIÓN ---------
+            dbc.Row([
+                dbc.Col(md=2),
+                dbc.Col([
+                    dcc.Graph(figure=fig_corr),
+                    html.H6("Interpretación de la Matriz de Correlación:"),
+                    html.P(
+                        "La matriz de correlación utiliza el coeficiente de Pearson, cuyos valores "
+                        "oscilan entre -1 y 1, para medir la relación lineal entre las variables "
+                        "vehiculares."
+                    ),
+
+                    html.P(
+                        "1. Correlaciones muy fuertes (tonos amarillo/naranja): Existe una colinealidad "
+                        "extremadamente alta entre las categorías de vehículos pesados de 3, 4, 5 y "
+                        "6 ejes, con valores que oscilan aproximadamente entre 0.80 y 0.94."
+                    ),
+                    html.P(
+                        "Significado: Cuando aumenta el flujo de un tipo de vehículo pesado "
+                        "(por ejemplo, 4 ejes), también aumenta el de los otros tipos similares. "
+                        "Estos vehículos operan como un bloque logístico dentro de la red vial."
+                    ),
+
+                    html.P(
+                        "2. Correlaciones moderadas: Los vehículos ligeros (automóviles) presentan una "
+                        "relación moderada con los vehículos pesados de 2 y 3 ejes, con coeficientes "
+                        "alrededor de 0.66 y 0.69."
+                    ),
+                    html.P(
+                        "Significado: El tráfico de automóviles tiende a coincidir temporalmente con "
+                        "el de camiones pequeños, pero esta relación se debilita conforme aumenta "
+                        "el número de ejes del vehículo."
+                    ),
+
+                    html.P(
+                        "3. Correlaciones débiles o nulas (tonos azul oscuro): La variable "
+                        "VEH_LIGEROS_TAR_DIF presenta valores cercanos a cero o incluso negativos "
+                        "respecto a la mayoría de las demás variables."
+                    ),
+                    html.P(
+                        "Significado: El comportamiento de los vehículos con tarifa diferenciada "
+                        "es estadísticamente independiente del flujo general de camiones y "
+                        "automóviles particulares."
+                    ),
+
+                    html.H6("Conclusión: "),
+                    html.P(
+                        "La conclusión principal es la existencia de una alta redundancia de "
+                        "información entre las variables de vehículos pesados de 3 a 6 ejes. "
+                        "Para la construcción de modelos predictivos, no es necesario incluir "
+                        "todas estas variables simultáneamente, ya que explican prácticamente "
+                        "el mismo comportamiento."
+                    ),
+                    html.P(
+                        "En contraste, los vehículos ligeros y los vehículos de gran tamaño "
+                        "(7 ejes) muestran comportamientos estadísticamente independientes, "
+                        "aportando información complementaria relevante para los modelos "
+                        "de clasificación y regresión."
+                    )
+                ], md=8),
+                dbc.Col(md=2)
+            ]),
+
+            html.Hr(),
+
+            # --------- SCATTER  ---------
+            html.Hr(),
+
+            html.H5("Diagramas de Dispersión: Variables con Mayor Correlación"),
+
+            *scatter_rows,
+
+            html.H6("Interpretación: "),
+            html.P(
+                "1. Los diagramas de dispersión presentan una correlación directa evidente, "
+                "mostrando una pendiente ascendente clara. Esto indica que el flujo de "
+                "vehículos pesados de diferentes números de ejes (2E, 3E, 4E, 5E y 6E) "
+                "aumenta y disminuye de manera simultánea."
+            ),
+            html.P(
+                "2. Se observa un acoplamiento estrecho entre ciertas categorías, siendo la "
+                "relación entre vehículos de 5 ejes (5E) y 6 ejes (6E) la más lineal y "
+                "compacta. Esto sugiere que estos tipos de vehículos comparten casi "
+                "exactamente las mismas rutas, horarios y dinámicas logísticas."
+            ),
+            html.P(
+                "3. La concentración de puntos cerca del origen (0,0) indica que "
+                "los volúmenes elevados de tráfico pesado ocurren con menor frecuencia, "
+                "confirmando que los eventos de alta carga vehicular son puntuales."
+            ),
+
+            html.H6("Conclusión: "),
+            html.P(
+                "El análisis de los diagramas de dispersión demuestra que la carga pesada "
+                "en la red vial se desplaza como un bloque altamente sincronizado. La "
+                "redundancia estadística entre las categorías de vehículos pesados es tan "
+                "alta que el comportamiento de una sola variable (por ejemplo, 6E) "
+                "permite predecir con gran precisión el comportamiento de las demás "
+                "categorías relacionadas, como 4E o 5E."
+            ),
+            html.P(
+                "Este resultado justifica la reducción del número de variables pesadas "
+                "en los modelos predictivos, ya que mantener todas las categorías no "
+                "aportaría información adicional significativa y podría afectar la "
+                "estabilidad y eficiencia del modelo."
+            )
+
         ]),
 
         # ===============================
-        # TAB 4: CLASIFICACIÓN
+        # TAB 4: LIMPIEZA Y TRANSFORMACIÓN
         # ===============================
-        dbc.Tab(label="🌳 Clasificación", tab_style={'fontWeight': 'bold'}, children=[
+        dbc.Tab(label="🧹 Limpieza y Transformación", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
+
+            html.Br(),
+
+            html.H4(
+                "Calidad y Preparación de Datos",
+                className="text-center fw-bold"
+            ),
+
+            html.Br(),
+
+            # ===============================
+            # FILA 1 → DOS GRÁFICOS LADO A LADO
+            # ===============================
+            dbc.Row([
+
+                # ---- GRÁFICO 1: VALORES FALTANTES ----
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5("Valores Faltantes",
+                                    className="text-center"),
+                            dcc.Graph(figure=fig_missing),
+
+                            html.P(
+                                "El análisis de valores faltantes muestra que el dataset "
+                                "no presenta datos nulos en sus variables principales, "
+                                "lo que garantiza integridad y consistencia en la información "
+                                "para el análisis posterior.",
+                                className="mt-3",
+                                style={"textAlign": "justify"}
+                            )
+                        ])
+                    ], className="shadow-sm"),
+                    md=6
+                ),
+
+                # ---- GRÁFICO 2: BOXPLOT ----
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5("Detección de Outliers (VEH_TOTAL)",
+                                    className="text-center"),
+                            dcc.Graph(figure=fig_boxplot),
+
+                            html.P(
+                                "El boxplot evidencia la presencia de valores atípicos "
+                                "en el flujo vehicular total. La amplitud de la caja y "
+                                "la extensión de los puntos superiores indican una alta "
+                                "variabilidad entre peajes, con registros que superan "
+                                "considerablemente el comportamiento promedio.",
+                                className="mt-3",
+                                style={"textAlign": "justify"}
+                            )
+                        ])
+                    ], className="shadow-sm"),
+                    md=6
+                )
+
+            ]),
+
+            html.Br(),
+
+            # ===============================
+            # FILA 2 → TABLA CENTRADA CON INTERPRETACIÓN
+            # ===============================
+            dbc.Row([
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5("Estadísticos Descriptivos de VEH_TOTAL",
+                                    className="text-center"),
+
+                            dbc.Table.from_dataframe(
+                                stats,
+                                striped=True,
+                                bordered=True,
+                                hover=True,
+                                responsive=True,
+                                className="mt-3"
+                            ),
+
+                            html.P(
+                                "La media (78,384) es considerablemente mayor que la "
+                                "mediana (41,815), lo que confirma una distribución "
+                                "asimétrica hacia la derecha. La desviación estándar "
+                                "(97,001) refleja una fuerte dispersión de los datos. "
+                                "Además, el valor máximo (980,656) supera ampliamente "
+                                "el tercer cuartil (97,636), evidenciando la existencia "
+                                "de outliers que influyen en el promedio general.",
+                                className="mt-3",
+                                style={"textAlign": "justify"}
+                            )
+                        ])
+                    ], className="shadow-sm"),
+                    md=8
+                )
+            ], justify="center")
+
+        ]),
+
+        # ===============================
+        # TAB 5: TORNEO DE MODELO
+        # ===============================
+        dbc.Tab(label="⚔️ Torneo de Modelo", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
+
+            dbc.Row([
+                dbc.Col([
+                    html.H3("🏆 Torneo de Modelos de Clasificación"),
+                    html.P(
+                        "Se compararon los modelos enseñados en clase: "
+                        "Árbol de Decisión, SVM y Análisis Discriminante."
+                    )
+                ])
+            ], className="mt-4"),
+
+            dbc.Row([
+                dbc.Col([
+                    dbc.Table.from_dataframe(
+                        df_torneo,
+                        striped=True,
+                        bordered=True,
+                        hover=True,
+                        responsive=True
+                    )
+                ])
+            ], className="mt-3"),
+
+            dbc.Row([
+                dbc.Col([
+                    dcc.Graph(figure=fig_torneo)
+                ])
+            ], className="mt-4"),
+
+            dbc.Row([
+                dbc.Col([
+                    dbc.Alert(
+                        "El SVM obtuvo mayor exactitud (97%), sin embargo, se seleccionó el Árbol de Decisión debido a su interpretabilidad. Dado que el objetivo del negocio es identificar qué variables generan congestión, el árbol permite visualizar reglas claras de decisión que apoyan la planificación operativa. La diferencia de rendimiento fue mínima (2.8%), por lo que se priorizó la explicabilidad sobre una ligera mejora predictiva.",
+                        color="success"
+                    )
+                ])
+            ], className="mt-3"),
+
+            html.Hr(),
+
+            html.H4("🏆 Torneo de Modelos de Regresión", className="mt-4"),
+
+            html.P(
+                "Comparación entre Regresión Lineal y Árbol de Regresión usando AÑO, MES y CODIGO_PEAJE."),
+
+            dbc.Table([
+                html.Thead(html.Tr([
+                    html.Th("Modelo"),
+                    html.Th("MAE"),
+                    html.Th("RMSE"),
+                    html.Th("R²")
+                ])),
+                html.Tbody([
+                    html.Tr([
+                        html.Td("Regresión Lineal"),
+                        html.Td(f"{mae_lr:,.2f}"),
+                        html.Td(f"{rmse_lr:,.2f}"),
+                        html.Td(f"{r2_lr:.4f}")
+                    ]),
+                    html.Tr([
+                        html.Td("Árbol de Regresión"),
+                        html.Td(f"{mae_tree:,.2f}"),
+                        html.Td(f"{rmse_tree:,.2f}"),
+                        html.Td(f"{r2_tree:.4f}")
+                    ]),
+                ])
+            ], bordered=True, striped=True, hover=True),
+
+            dbc.Row([
+                dbc.Col(dcc.Graph(figure=fig_rmse), md=6),
+                dbc.Col(dcc.Graph(figure=fig_r2), md=6)
+            ], className="mt-4"),
+
+            dbc.Alert(
+                "Aunque inicialmente se consideró la Regresión Lineal por su simplicidad e interpretabilidad, el torneo de modelos demostró que el comportamiento del flujo vehicular no es lineal. El Árbol de Regresión obtuvo un R² de 0.91 frente a 0.01 de la regresión lineal, por lo que se seleccionó como modelo final al capturar mejor las relaciones no lineales entre año, mes y código de peaje.",
+                color="info",
+                className="mt-3"
+            ),
+
+        ]),
+
+        # ===============================
+        # TAB 6: CLASIFICACIÓN
+        # ===============================
+        dbc.Tab(label="🌳 Clasificación", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
             dbc.Container([
                 # Título y descripción
                 dbc.Row([
@@ -765,42 +1105,6 @@ app.layout = dbc.Container([
                         ], justify="center", className="mb-4")
                     ])
                 ]),
-
-                # Métricas principales
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H2(f"{accuracy:.1%}", className="text-center mb-0",
-                                        style={'color': COLOR_SUCCESS, 'fontWeight': 'bold'}),
-                                html.P(
-                                    "Accuracy", className="text-center text-muted mb-0")
-                            ])
-                        ], className="shadow")
-                    ], md=4),
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H2(f"{report['macro avg']['precision']:.1%}",
-                                        className="text-center mb-0",
-                                        style={'color': COLOR_INFO, 'fontWeight': 'bold'}),
-                                html.P("Precision",
-                                       className="text-center text-muted mb-0")
-                            ])
-                        ], className="shadow")
-                    ], md=4),
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H2(f"{report['macro avg']['recall']:.1%}",
-                                        className="text-center mb-0",
-                                        style={'color': COLOR_WARNING, 'fontWeight': 'bold'}),
-                                html.P(
-                                    "Recall", className="text-center text-muted mb-0")
-                            ])
-                        ], className="shadow")
-                    ], md=4)
-                ], className="mb-5"),
 
                 # Gráfico 1: Matriz de Confusión
                 dbc.Row([
@@ -937,9 +1241,9 @@ app.layout = dbc.Container([
         ]),
 
         # ===============================
-        # TAB 5: REGRESIÓN
+        # TAB 7: REGRESIÓN
         # ===============================
-        dbc.Tab(label="📈 Regresión", tab_style={'fontWeight': 'bold'}, children=[
+        dbc.Tab(label="📈 Regresión", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
             dbc.Container([
                 # Título
                 dbc.Row([
@@ -954,58 +1258,6 @@ app.layout = dbc.Container([
                         )
                     ])
                 ]),
-
-                # Métricas principales
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H3(f"{mae:,.0f}", className="text-center mb-0",
-                                        style={'color': COLOR_PRIMARY, 'fontWeight': 'bold'}),
-                                html.P("MAE", className="text-center text-muted mb-0",
-                                       style={'fontSize': '0.9rem'}),
-                                html.Small("Mean Absolute Error",
-                                           className="text-center d-block text-muted")
-                            ])
-                        ], className="shadow")
-                    ], md=3),
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H3(f"{mse:,.0f}", className="text-center mb-0",
-                                        style={'color': COLOR_INFO, 'fontWeight': 'bold'}),
-                                html.P("MSE", className="text-center text-muted mb-0",
-                                       style={'fontSize': '0.9rem'}),
-                                html.Small("Mean Squared Error",
-                                           className="text-center d-block text-muted")
-                            ])
-                        ], className="shadow")
-                    ], md=3),
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H3(f"{rmse:,.0f}", className="text-center mb-0",
-                                        style={'color': COLOR_WARNING, 'fontWeight': 'bold'}),
-                                html.P("RMSE", className="text-center text-muted mb-0",
-                                       style={'fontSize': '0.9rem'}),
-                                html.Small("Root Mean Squared Error",
-                                           className="text-center d-block text-muted")
-                            ])
-                        ], className="shadow")
-                    ], md=3),
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.H3(f"{r2:.3f}", className="text-center mb-0",
-                                        style={'color': COLOR_SUCCESS, 'fontWeight': 'bold'}),
-                                html.P("R²", className="text-center text-muted mb-0",
-                                       style={'fontSize': '0.9rem'}),
-                                html.Small("Coef. Determinación",
-                                           className="text-center d-block text-muted")
-                            ])
-                        ], className="shadow")
-                    ], md=3)
-                ], className="mb-5"),
 
                 # Gráfico 1: Distribución de Residuales
                 dbc.Row([
@@ -1092,15 +1344,18 @@ app.layout = dbc.Container([
         ]),
 
         # ===============================
-        # TAB 6: CONCLUSIÓN
+        # TAB 8: CONCLUSIÓN
         # ===============================
-        dbc.Tab(label="✅ Conclusión", tab_style={'fontWeight': 'bold'}, children=[
+        dbc.Tab(label="✅ Conclusión", tab_style={'fontWeight': 'bold', "flex": "0 0 25%"}, children=[
             dbc.Row([
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
                             html.H3("🎯 Conclusión General", className="text-center mb-4",
                                     style={'fontWeight': 'bold', 'color': COLOR_PRIMARY}),
+                            html.P(
+                                "El uso del árbol de decisión permitió identificar qué tipo de vehículo contribuye en mayor medida a la congestión del flujo vehicular, evidenciando que los vehículos ligeros son los principales responsables del incremento de la demanda en los peajes. Por otro lado, la regresión lineal permitió analizar y proyectar el nivel de saturación por peaje, identificando aquellos que presentarían mayor carga vehicular en el tiempo. En conjunto, ambas metodologías aportan una base analítica sólida para anticipar la congestión vial y apoyar la toma de decisiones en la planificación operativa y estructural de los peajes hacia el año 2025."
+                            ),
 
                             html.H5("📊 Hallazgos Principales:", className="mb-3",
                                     style={'color': COLOR_SUCCESS}),
@@ -1159,655 +1414,10 @@ app.layout = dbc.Container([
                 ], md=10)
             ], className="mt-4 mb-5", justify="center")
         ])
-
-    ])
+    ], style={"display": "flex", "flexWrap": "wrap", "justifyContent": "center", "text-align": "center"
+              }, className="w-100 btn btn-primary")
 ], fluid=True, style={'backgroundColor': '#f8f9fa'})
 
 
 if __name__ == "__main__":
     app.run(debug=True, port=8060)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    from dash import Dash, html, dcc
-import dash_bootstrap_components as dbc
-import pandas as pd
-import plotly.express as px
-
-# ===============================
-# APP
-# ===============================
-app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
-app.title = "Análisis Predictivo de Flujo Vehicular"
-
-# ===============================
-# CARGAR DATOS
-# ===============================
-df = pd.read_excel(
-    r"C:\Users\camila\Desktop\presentacion\Flujo_vehicular_2014_2024 (1).xlsx"
-)
-
-df = df.rename(columns={"A O": "AÑO"})
-
-# ===============================
-# GRÁFICOS (SIN TÍTULO)
-# ===============================
-
-fig_anio = px.line(
-    df.groupby("AÑO", as_index=False)["VEH_TOTAL"].sum(),
-    x="AÑO",
-    y="VEH_TOTAL",
-    markers=True
-)
-
-fig_depa = px.bar(
-    df.groupby("DEPARTAMENTO", as_index=False)["VEH_TOTAL"].sum(),
-    x="DEPARTAMENTO",
-    y="VEH_TOTAL"
-)
-
-# ===============================
-# GRÁFICO DE VALORES FALTANTES
-# ===============================
-
-missing_data = df.isnull().sum().reset_index()
-missing_data.columns = ["Columna", "Valores Faltantes"]
-
-fig_missing = px.bar(
-    missing_data,
-    x="Columna",
-    y="Valores Faltantes",
-    title="Valores Faltantes por Variable",
-    text="Valores Faltantes"
-)
-
-fig_missing.update_layout(
-    template="plotly_white",
-    xaxis_tickangle=-45
-)
-
-
-# ===============================
-# BOXPLOT VEH_TOTAL
-# ===============================
-
-fig_boxplot = px.box(
-    df,
-    y="VEH_TOTAL",
-    title="Distribución y Outliers de VEH_TOTAL"
-)
-
-fig_boxplot.update_layout(template="plotly_white")
-
-# ==============================
-# TABLA: ESTADÍSTICOS VEH_TOTAL
-# ==============================
-
-stats = df["VEH_TOTAL"].describe().reset_index()
-stats.columns = ["Estadístico", "Valor"]
-
-# Redondear valores
-stats["Valor"] = stats["Valor"].round(2)
-
-
-
-
-
-# ===============================
-# TORNEO DE MODELOS (CLASE)
-# ===============================
-
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, f1_score
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import StandardScaler
-import pandas as pd
-import plotly.express as px
-
-variables = [
-    'VEH_LIGEROS_TAR_DIF',
-    'VEH_LIGEROS_AUTOMOVILES',
-    'VEH_PESADOS_TAR_DIF',
-    'VEH_PESADOS__2E',
-    'VEH_PESADOS_3E',
-    'VEH_PESADOS_4E',
-    'VEH_PESADOS_5E',
-    'VEH_PESADOS_6E',
-    'VEH_PESADOS_7E'
-]
-
-X = df[variables]
-
-df['flujo_clase'] = pd.qcut(
-    df['VEH_TOTAL'],
-    q=3,
-    labels=['Bajo', 'Medio', 'Alto']
-)
-
-y = df['flujo_clase']
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.3, random_state=42
-)
-
-# 🔹 Escalado (IMPORTANTE para SVM y LDA)
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-modelos = {
-    "Árbol de Decisión": DecisionTreeClassifier(max_depth=5),
-    "SVM": SVC(kernel='rbf'),
-    "Discriminante (LDA)": LinearDiscriminantAnalysis()
-}
-
-resultados = []
-
-for nombre, modelo in modelos.items():
-    
-    # Árbol no necesita escalado
-    if nombre == "Árbol de Decisión":
-        modelo.fit(X_train, y_train)
-        y_pred = modelo.predict(X_test)
-    else:
-        modelo.fit(X_train_scaled, y_train)
-        y_pred = modelo.predict(X_test_scaled)
-
-    resultados.append({
-        "Modelo": nombre,
-        "Accuracy": round(accuracy_score(y_test, y_pred), 4),
-        "F1-Score": round(f1_score(y_test, y_pred, average='weighted'), 4)
-    })
-
-df_torneo = pd.DataFrame(resultados).sort_values(by="Accuracy", ascending=False)
-
-fig_torneo = px.bar(
-    df_torneo,
-    x="Modelo",
-    y="Accuracy",
-    text="Accuracy",
-    color="Modelo",
-    title="🏆 Torneo de Modelos - Clasificación"
-)
-
-fig_torneo.update_traces(textposition="outside")
-fig_torneo.update_layout(yaxis_range=[0,1])
-
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
-# -----------------------------
-# VARIABLES DE REGRESIÓN
-# -----------------------------
-df_reg = df.copy()
-
-# Convertir CODIGO_PEAJE a numérico
-le = LabelEncoder()
-df_reg["CODIGO_PEAJE"] = le.fit_transform(df_reg["CODIGO_PEAJE"])
-
-x_reg = df_reg[["AÑO", "MES", "CODIGO_PEAJE"]]
-y_reg = df_reg['VEH_LIGEROS_TOTAL']
-
-X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(
-    x_reg, y_reg, test_size=0.2, random_state=42
-)
-
-# -----------------------------
-# REGRESIÓN LINEAL
-# -----------------------------
-lr = LinearRegression()
-lr.fit(X_train_reg, y_train_reg)
-y_pred_lr = lr.predict(X_test_reg)
-
-mae_lr = mean_absolute_error(y_test_reg, y_pred_lr)
-rmse_lr = np.sqrt(mean_squared_error(y_test_reg, y_pred_lr))
-r2_lr = r2_score(y_test_reg, y_pred_lr)
-
-# -----------------------------
-# ÁRBOL DE REGRESIÓN
-# -----------------------------
-tree_reg = DecisionTreeRegressor(random_state=42)
-tree_reg.fit(X_train_reg, y_train_reg)
-y_pred_tree = tree_reg.predict(X_test_reg)
-
-mae_tree = mean_absolute_error(y_test_reg, y_pred_tree)
-rmse_tree = np.sqrt(mean_squared_error(y_test_reg, y_pred_tree))
-r2_tree = r2_score(y_test_reg, y_pred_tree)
-
-import plotly.express as px
-import pandas as pd
-
-# =========================
-# TORNEO REGRESIÓN DATA
-# =========================
-
-df_torneo_reg = pd.DataFrame({
-    "Modelo": ["Regresión Lineal", "Árbol de Regresión"],
-    "RMSE": [65143.67, 19322.51],
-    "R2": [0.0161, 0.9134]
-})
-
-# Gráfico RMSE
-fig_rmse = px.bar(
-    df_torneo_reg,
-    x="Modelo",
-    y="RMSE",
-    title="Comparación RMSE (Menor es Mejor)",
-    text_auto=True
-)
-
-fig_rmse.update_layout(template="plotly_white")
-
-# Gráfico R2
-fig_r2 = px.bar(
-    df_torneo_reg,
-    x="Modelo",
-    y="R2",
-    title="Comparación R² (Mayor es Mejor)",
-    text_auto=True
-)
-
-fig_r2.update_layout(template="plotly_white")
-
-fig_anio.update_layout(title=None)
-fig_depa.update_layout(title=None)
-
-# ===============================
-# LAYOUT
-# ===============================
-app.layout = dbc.Container([
-
-    # --------- TÍTULO GENERAL ---------
-    dbc.Row([
-        dbc.Col([
-            html.H1("Análisis Predictivo del Flujo Vehicular",
-                    className="text-center text-primary mt-4"),
-            html.P("Clasificación y regresión aplicadas a datos de peajes",
-                   className="text-center text-muted")
-        ])
-    ]),
-
-    html.Hr(),
-
-    dbc.Tabs([
-
-        # ===============================
-        # TAB 1
-        # ===============================
-        dbc.Tab(label="Problema y Objetivo", children=[
-            dbc.Row([
-                dbc.Col([
-                    html.H4("Problema"),
-                    html.P(
-                        "El aumento del flujo vehicular genera congestión en ciertos peajes, "
-                        "afectando la movilidad y la gestión del transporte."
-                    ),
-                    html.H4("Objetivo"),
-                    html.P(
-                        "Analizar el flujo vehicular para identificar patrones de congestión "
-                        "y predecir los peajes más saturados usando modelos de clasificación y regresión."
-                    )
-                ], md=10)
-            ], className="mt-4")
-        ]),
-
-# ===============================
-# TAB 2 - CONOCIENDO EL NEGOCIO
-# ===============================
-dbc.Tab(label="Conociendo el Negocio", children=[
-
-    html.Br(),
-
-    html.H4(
-        "Análisis Estratégico del Flujo Vehicular",
-        className="text-center fw-bold"
-    ),
-
-    html.Br(),
-
-    dbc.Row([
-
-        # ===============================
-        # GRÁFICO 1 - EVOLUCIÓN POR AÑO
-        # ===============================
-        dbc.Col(
-            dbc.Card([
-                dbc.CardBody([
-
-                    html.H5(
-                        "Evolución del Flujo Vehicular por Año",
-                        className="text-center"
-                    ),
-
-                    dcc.Graph(figure=fig_anio),
-
-                    html.P(
-                        "El análisis anual permite observar la tendencia del flujo "
-                        "vehicular a lo largo del tiempo. Se identifican periodos "
-                        "de crecimiento sostenido, lo que puede indicar mayor "
-                        "actividad económica y movilidad. Esta información es clave "
-                        "para proyectar demanda futura y planificar infraestructura.",
-                        className="mt-3",
-                        style={"textAlign": "justify"}
-                    )
-
-                ])
-            ], className="shadow-sm"),
-            md=6
-        ),
-
-        # ===============================
-        # GRÁFICO 2 - POR DEPARTAMENTO
-        # ===============================
-        dbc.Col(
-            dbc.Card([
-                dbc.CardBody([
-
-                    html.H5(
-                        "Flujo Vehicular Total por Departamento",
-                        className="text-center"
-                    ),
-
-                    dcc.Graph(figure=fig_depa),
-
-                    html.P(
-                        "Este gráfico permite identificar los departamentos con "
-                        "mayor concentración vehicular. Aquellos con niveles más "
-                        "altos representan zonas estratégicas para inversión y "
-                        "optimización de recursos, mientras que los de menor flujo "
-                        "pueden indicar oportunidades de desarrollo o menor demanda.",
-                        className="mt-3",
-                        style={"textAlign": "justify"}
-                    )
-
-                ])
-            ], className="shadow-sm"),
-            md=6
-        )
-
-    ], className="mt-4")
-
-]),
-
-        # ===============================
-        # TAB 3
-        # ===============================
-        dbc.Tab(label="EDA", children=[
-            html.Div("Aquí irá el análisis exploratorio detallado.",
-                     className="m-4")
-        ]),
-
-# ===============================
-# TAB: LIMPIEZA Y TRANSFORMACIÓN
-# ===============================
-dbc.Tab(label="Limpieza y Transformación", children=[
-
-    html.Br(),
-
-    html.H4(
-        "Calidad y Preparación de Datos",
-        className="text-center fw-bold"
-    ),
-
-    html.Br(),
-
-    # ===============================
-    # FILA 1 → DOS GRÁFICOS LADO A LADO
-    # ===============================
-    dbc.Row([
-
-        # ---- GRÁFICO 1: VALORES FALTANTES ----
-        dbc.Col(
-            dbc.Card([
-                dbc.CardBody([
-                    html.H5("Valores Faltantes", className="text-center"),
-                    dcc.Graph(figure=fig_missing),
-
-                    html.P(
-                        "El análisis de valores faltantes muestra que el dataset "
-                        "no presenta datos nulos en sus variables principales, "
-                        "lo que garantiza integridad y consistencia en la información "
-                        "para el análisis posterior.",
-                        className="mt-3",
-                        style={"textAlign": "justify"}
-                    )
-                ])
-            ], className="shadow-sm"),
-            md=6
-        ),
-
-        # ---- GRÁFICO 2: BOXPLOT ----
-        dbc.Col(
-            dbc.Card([
-                dbc.CardBody([
-                    html.H5("Detección de Outliers (VEH_TOTAL)", className="text-center"),
-                    dcc.Graph(figure=fig_boxplot),
-
-                    html.P(
-                        "El boxplot evidencia la presencia de valores atípicos "
-                        "en el flujo vehicular total. La amplitud de la caja y "
-                        "la extensión de los puntos superiores indican una alta "
-                        "variabilidad entre peajes, con registros que superan "
-                        "considerablemente el comportamiento promedio.",
-                        className="mt-3",
-                        style={"textAlign": "justify"}
-                    )
-                ])
-            ], className="shadow-sm"),
-            md=6
-        )
-
-    ]),
-
-    html.Br(),
-
-    # ===============================
-    # FILA 2 → TABLA CENTRADA CON INTERPRETACIÓN
-    # ===============================
-    dbc.Row([
-        dbc.Col(
-            dbc.Card([
-                dbc.CardBody([
-                    html.H5("Estadísticos Descriptivos de VEH_TOTAL",
-                            className="text-center"),
-
-                    dbc.Table.from_dataframe(
-                        stats,
-                        striped=True,
-                        bordered=True,
-                        hover=True,
-                        responsive=True,
-                        className="mt-3"
-                    ),
-
-                    html.P(
-                        "La media (78,384) es considerablemente mayor que la "
-                        "mediana (41,815), lo que confirma una distribución "
-                        "asimétrica hacia la derecha. La desviación estándar "
-                        "(97,001) refleja una fuerte dispersión de los datos. "
-                        "Además, el valor máximo (980,656) supera ampliamente "
-                        "el tercer cuartil (97,636), evidenciando la existencia "
-                        "de outliers que influyen en el promedio general.",
-                        className="mt-3",
-                        style={"textAlign": "justify"}
-                    )
-                ])
-            ], className="shadow-sm"),
-            md=8
-        )
-    ], justify="center")
-
-]),
-
-
-
-       dbc.Tab(label="Torneo de Modelo", children=[
-
-    dbc.Row([
-        dbc.Col([
-            html.H3("🏆 Torneo de Modelos de Clasificación"),
-            html.P(
-                "Se compararon los modelos enseñados en clase: "
-                "Árbol de Decisión, SVM y Análisis Discriminante."
-            )
-        ])
-    ], className="mt-4"),
-
-    dbc.Row([
-        dbc.Col([
-            dbc.Table.from_dataframe(
-                df_torneo,
-                striped=True,
-                bordered=True,
-                hover=True,
-                responsive=True
-            )
-        ])
-    ], className="mt-3"),
-
-    dbc.Row([
-        dbc.Col([
-            dcc.Graph(figure=fig_torneo)
-        ])
-    ], className="mt-4"),
-
-    dbc.Row([
-        dbc.Col([
-            dbc.Alert(
-                "El SVM obtuvo mayor exactitud (97%), sin embargo, se seleccionó el Árbol de Decisión debido a su interpretabilidad. Dado que el objetivo del negocio es identificar qué variables generan congestión, el árbol permite visualizar reglas claras de decisión que apoyan la planificación operativa. La diferencia de rendimiento fue mínima (2.8%), por lo que se priorizó la explicabilidad sobre una ligera mejora predictiva.",
-                color="success"
-            )
-        ])
-    ], className="mt-3"),
-
-    html.Hr(),
-
-html.H4("🏆 Torneo de Modelos de Regresión", className="mt-4"),
-
-html.P("Comparación entre Regresión Lineal y Árbol de Regresión usando AÑO, MES y CODIGO_PEAJE."),
-
-dbc.Table([
-    html.Thead(html.Tr([
-        html.Th("Modelo"),
-        html.Th("MAE"),
-        html.Th("RMSE"),
-        html.Th("R²")
-    ])),
-    html.Tbody([
-        html.Tr([
-            html.Td("Regresión Lineal"),
-            html.Td(f"{mae_lr:,.2f}"),
-            html.Td(f"{rmse_lr:,.2f}"),
-            html.Td(f"{r2_lr:.4f}")
-        ]),
-        html.Tr([
-            html.Td("Árbol de Regresión"),
-            html.Td(f"{mae_tree:,.2f}"),
-            html.Td(f"{rmse_tree:,.2f}"),
-            html.Td(f"{r2_tree:.4f}")
-        ]),
-    ])
-], bordered=True, striped=True, hover=True),
-
-dbc.Row([
-    dbc.Col(dcc.Graph(figure=fig_rmse), md=6),
-    dbc.Col(dcc.Graph(figure=fig_r2), md=6)
-], className="mt-4"),
-
-dbc.Alert(
-    "Aunque inicialmente se consideró la Regresión Lineal por su simplicidad e interpretabilidad, el torneo de modelos demostró que el comportamiento del flujo vehicular no es lineal. El Árbol de Regresión obtuvo un R² de 0.91 frente a 0.01 de la regresión lineal, por lo que se seleccionó como modelo final al capturar mejor las relaciones no lineales entre año, mes y código de peaje.",
-    color="info",
-    className="mt-3"
-),
-
-]),
-
-        # ===============================
-        # TAB 4
-        # ===============================
-        dbc.Tab(label="Clasificación", children=[
-            html.Div("Modelo Árbol de Decisión.",
-                     className="m-4")
-        ]),
-
-        # ===============================
-        # TAB 5
-        # ===============================
-        dbc.Tab(label="Regresión", children=[
-            html.Div("Modelo de Regresión Lineal.",
-                     className="m-4")
-        ]),
-
-        # ===============================
-        # TAB 6
-        # ===============================
-        dbc.Tab(label="Conclusión", children=[
-            html.Div(
-                "El análisis permitió identificar tendencias de crecimiento "
-                "y departamentos críticos, aportando información estratégica "
-                "para mejorar la gestión del tráfico.",
-                className="m-4"
-            )
-        ])
-
-    ])
-
-], fluid=True)
-
-# ===============================
-# RUN
-# ===============================
-if __name__ == "__main__":
-    app.run(debug=True, port=8060)
-
